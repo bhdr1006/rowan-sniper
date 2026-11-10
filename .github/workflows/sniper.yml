@@ -1,0 +1,55 @@
+name: Course Sniper
+
+on:
+  schedule:
+    - cron: "*/10 * * * *"   # GitHub starts a new run about every 10 min (can be late)
+  workflow_dispatch:          # lets you start it by hand from the Actions tab
+
+permissions:
+  contents: write
+
+# Only one checker at a time. A new run waits until the current one finishes.
+concurrency:
+  group: course-sniper
+  cancel-in-progress: false
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Load previous snapshot
+        run: |
+          mkdir -p data
+          if git fetch --depth=1 origin data 2>/dev/null; then
+            git show origin/data:sections.json > data/sections.json || rm -f data/sections.json
+          else
+            echo "No snapshot yet (first run)."
+          fi
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Watch Section Tally
+        env:
+          TERM_CODE: ${{ vars.TERM_CODE || '202720' }}
+          TOPIC_PREFIX: ${{ vars.TOPIC_PREFIX || 'rowan-sniper' }}
+          RUN_MINUTES: "28"
+          INTERVAL_SECONDS: "60"
+        run: python sniper.py
+
+      - name: Save snapshot to the data branch
+        if: always()
+        run: |
+          [ -f data/sections.json ] || exit 0
+          mkdir -p /tmp/snap && cp data/sections.json /tmp/snap/
+          cd /tmp/snap
+          git init -q -b data
+          git config user.name "course-sniper-bot"
+          git config user.email "course-sniper-bot@users.noreply.github.com"
+          git add sections.json
+          git commit -qm "snapshot $(date -u +%FT%TZ)"
+          git push -qf "https://x-access-token:${{ secrets.GITHUB_TOKEN }}@github.com/${{ github.repository }}.git" data
