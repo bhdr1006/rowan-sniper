@@ -1,0 +1,293 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Rowan Course Sniper</title>
+<meta name="description" content="Get a phone alert the moment a seat opens in a full Rowan class.">
+<style>
+  :root{
+    --brown:#57150B; --brown-2:#3d0e07; --gold:#FFCC00; --bg:#faf7f2; --card:#fff;
+    --ink:#1f1a17; --muted:#6b625c; --line:#e7e0d6; --green:#1a7f37; --yellow:#b7791f; --red:#c0392b;
+  }
+  *{box-sizing:border-box}
+  [hidden]{display:none!important}
+  body{margin:0;font-family:system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;background:var(--bg);color:var(--ink);line-height:1.45}
+  header{background:var(--brown);color:#fff;padding:28px 20px 34px}
+  .wrap{max-width:980px;margin:0 auto;padding:0 20px}
+  header .wrap{padding:0}
+  h1{margin:0;font-size:30px;letter-spacing:-.5px}
+  h1 span{color:var(--gold)}
+  header p{margin:6px 0 0;opacity:.85}
+  .status{margin-top:14px;font-size:13px;display:inline-flex;gap:8px;align-items:center;background:var(--brown-2);padding:6px 12px;border-radius:999px}
+  .dot{width:8px;height:8px;border-radius:50%;background:#888}
+  .dot.ok{background:#4ade80} .dot.old{background:var(--gold)} .dot.bad{background:#f87171}
+  main{margin-top:-18px}
+  .search{background:var(--card);border:1px solid var(--line);border-radius:14px;padding:14px;display:flex;gap:10px;box-shadow:0 4px 18px rgba(0,0,0,.06)}
+  .search input{flex:1;font-size:17px;padding:12px 14px;border:1px solid var(--line);border-radius:10px;outline:none}
+  .search input:focus{border-color:var(--brown)}
+  .hint{color:var(--muted);font-size:13px;margin:8px 4px 0}
+  h2{font-size:17px;margin:28px 0 10px}
+  .list{display:flex;flex-direction:column;gap:8px}
+  .sec{background:var(--card);border:1px solid var(--line);border-radius:12px;padding:12px 14px;display:grid;grid-template-columns:1fr auto;gap:10px;align-items:center}
+  .sec .top{font-weight:650}
+  .sec .top small{font-weight:500;color:var(--muted);margin-left:6px}
+  .sec .meta{font-size:13px;color:var(--muted);margin-top:2px}
+  .badges{display:flex;gap:6px;flex-wrap:wrap;margin-top:6px}
+  .badge{font-size:12px;padding:2px 8px;border-radius:999px;border:1px solid var(--line);background:#fff}
+  .badge.open{background:#e8f5ec;color:var(--green);border-color:#bfe3c9}
+  .badge.low{background:#fdf3e1;color:var(--yellow);border-color:#f2d9a8}
+  .badge.full{background:#fbe9e7;color:var(--red);border-color:#f2c2bb}
+  .badge.cancel{background:#eee;color:#555}
+  button{font:inherit;cursor:pointer;border-radius:10px;border:1px solid var(--brown);background:var(--brown);color:#fff;padding:9px 14px;font-weight:600}
+  button.ghost{background:#fff;color:var(--brown)}
+  button.small{padding:6px 10px;font-size:13px}
+  button:disabled{opacity:.5;cursor:default}
+  .empty{color:var(--muted);padding:18px;text-align:center;border:1px dashed var(--line);border-radius:12px;background:#fff}
+  .how{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:10px;margin-top:8px}
+  .how div{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px;font-size:14px}
+  .how b{display:block;margin-bottom:4px;color:var(--brown)}
+  dialog{border:none;border-radius:16px;padding:0;max-width:460px;width:calc(100% - 30px);box-shadow:0 20px 60px rgba(0,0,0,.3)}
+  dialog::backdrop{background:rgba(30,10,5,.45)}
+  .dlg{padding:22px}
+  .dlg h3{margin:0 0 4px}
+  .dlg ol{padding-left:20px;margin:14px 0}
+  .dlg li{margin-bottom:12px}
+  .topic{display:flex;gap:6px;margin-top:6px}
+  .topic code{flex:1;background:#f4efe8;border-radius:8px;padding:8px 10px;font-size:14px;overflow-wrap:anywhere}
+  .row{display:flex;gap:8px;flex-wrap:wrap;margin-top:6px}
+  .row a{color:var(--brown);font-weight:600}
+  .actions{display:flex;justify-content:space-between;gap:8px;margin-top:6px}
+  .note{font-size:12px;color:var(--muted)}
+  footer{margin:40px 0 30px;font-size:12px;color:var(--muted);text-align:center}
+  @media (max-width:560px){ .sec{grid-template-columns:1fr} h1{font-size:25px} }
+</style>
+</head>
+<body>
+<header>
+  <div class="wrap">
+    <h1>Rowan Course <span>Sniper</span></h1>
+    <p>Class full? Get a phone alert the second someone drops it.</p>
+    <div class="status"><span class="dot" id="dot"></span><span id="status">Loading sections…</span></div>
+  </div>
+</header>
+
+<main class="wrap">
+  <form class="search" id="searchForm">
+    <input id="q" type="search" inputmode="search" autocomplete="off" placeholder="Enter CRN (e.g. 21345) or course name" aria-label="Search by CRN or course">
+    <button type="submit">Find</button>
+  </form>
+  <p class="hint">Just type the 5-digit <b>CRN</b> and hit <b>Find</b>. You can also search by course title, course number or professor.</p>
+
+  <section id="mineBox" hidden>
+    <h2>My snipes</h2>
+    <div class="list" id="mine"></div>
+  </section>
+
+  <section>
+    <h2 id="resTitle">How it works</h2>
+    <div class="list" id="results"></div>
+    <div class="how" id="how">
+      <div><b>1. Find your class</b>Search for the full section you want.</div>
+      <div><b>2. Snipe it</b>Subscribe to that section in the free <i>ntfy</i> app. No account needed.</div>
+      <div><b>3. Get the alert</b>When a seat opens, your phone buzzes. Register in Self-Service Banner fast.</div>
+    </div>
+  </section>
+
+  <footer>
+    Student-made project, not affiliated with Rowan University. Data comes from the public Section Tally and is checked about once a minute.
+    It only alerts you — it never registers for you.
+  </footer>
+</main>
+
+<dialog id="dlg">
+  <div class="dlg">
+    <h3 id="dTitle"></h3>
+    <div class="note" id="dSub"></div>
+    <ol>
+      <li>Install the free <b>ntfy</b> app:
+        <div class="row">
+          <a href="https://apps.apple.com/us/app/ntfy/id1625396347" target="_blank" rel="noopener">iPhone</a> ·
+          <a href="https://play.google.com/store/apps/details?id=io.heckel.ntfy" target="_blank" rel="noopener">Android</a>
+        </div>
+      </li>
+      <li>In the app tap <b>+</b> and subscribe to this topic:
+        <div class="topic"><code id="dTopic"></code><button class="small ghost" id="copyBtn">Copy</button></div>
+        <div class="note" style="margin-top:6px">On a computer? <a id="dWeb" target="_blank" rel="noopener">Open it in the browser</a> and allow notifications.</div>
+      </li>
+      <li>Check it works: <button class="small ghost" id="testBtn">Send me a test alert</button> <span class="note" id="testMsg"></span></li>
+    </ol>
+    <p class="note">When a seat opens you'll get an alert with the CRN. Register in <a href="https://ssb.rowan.edu/" target="_blank" rel="noopener">Self-Service Banner</a> right away — other people may be sniping it too.</p>
+    <div class="actions">
+      <button class="ghost" id="closeBtn">Close</button>
+      <button id="saveBtn">Add to my snipes</button>
+    </div>
+  </div>
+</dialog>
+
+<script>
+// ---------- Where the data lives ----------
+// On GitHub Pages (https://OWNER.github.io/REPO/) this finds the repo by itself.
+// Anywhere else, open the page with ?repo=OWNER/REPO
+function findRepo() {
+  const p = new URLSearchParams(location.search).get('repo');
+  if (p) return p;
+  if (location.hostname.endsWith('.github.io')) {
+    const owner = location.hostname.split('.')[0];
+    const repo = location.pathname.split('/').filter(Boolean)[0] || (owner + '.github.io');
+    return owner + '/' + repo;
+  }
+  return null;
+}
+const REPO = findRepo();
+const DATA_URL = REPO ? `https://raw.githubusercontent.com/${REPO}/data/sections.json` : null;
+
+let DB = null, LIST = [], current = null;
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const clean = s => String(s ?? '').replace(/<br\s*\/?>/gi, ' · ').replace(/<[^>]+>/g, '').replace(/\s+/g, ' ').trim();
+const num = v => Number(v) || 0;
+
+function loadMine() { try { return JSON.parse(localStorage.getItem('snipes') || '[]'); } catch { return []; } }
+function saveMine(a) { try { localStorage.setItem('snipes', JSON.stringify(a)); } catch {} }
+
+function topicFor(crn) { return `${DB.topic_prefix}-${DB.term_code}-${crn}`; }
+
+function seatBadge(s) {
+  if (s.cancelled_indicator === true) return '<span class="badge cancel">Cancelled</span>';
+  const a = num(s.available), m = num(s.max_seats);
+  const cls = a <= 0 ? 'full' : (m && a / m <= 0.25 ? 'low' : 'open');
+  const txt = a <= 0 ? `Full (${num(s.enrolled)}/${m})` : `${a} of ${m} seats open`;
+  return `<span class="badge ${cls}">${txt}</span>`;
+}
+
+function card(s, mine) {
+  const name = `${esc(s.subject)} ${esc(s.course_number)}-${esc(s.section_sequence)}`;
+  const time = clean(s.formatted_meeting_times);
+  const wl = num(s.wait_capacity) ? `<span class="badge">Waitlist ${num(s.wait_count)}/${num(s.wait_capacity)}</span>` : '';
+  const btn = mine
+    ? `<button class="small ghost" data-remove="${esc(s.crn)}">Remove</button>`
+    : `<button class="small" data-snipe="${esc(s.crn)}">Snipe</button>`;
+  return `<div class="sec">
+    <div>
+      <div class="top">${name}<small>CRN ${esc(s.crn)}</small></div>
+      <div class="meta">${esc(clean(s.course_title))}${s.primary_professor ? ' · ' + esc(clean(s.primary_professor)) : ''}</div>
+      ${time || s.campus ? `<div class="meta">${esc(time)}${s.campus ? ' · ' + esc(s.campus) : ''}</div>` : ''}
+      <div class="badges">${seatBadge(s)}${wl}</div>
+    </div>
+    <div>${btn}</div>
+  </div>`;
+}
+
+function renderMine() {
+  const mine = loadMine().filter(c => DB.sections[c]);
+  $('mineBox').hidden = mine.length === 0;
+  $('mine').innerHTML = mine.map(c => card(DB.sections[c], true)).join('');
+}
+
+function search() {
+  const q = $('q').value.trim().toLowerCase();
+  const res = $('results');
+  if (!q) { $('resTitle').textContent = 'How it works'; $('how').hidden = false; res.innerHTML = ''; return; }
+  $('how').hidden = true;
+  if (!DB) {
+    $('resTitle').textContent = 'Section data is not loaded';
+    res.innerHTML = `<div class="empty">${esc(LOAD_ERROR || 'Still loading… try again in a second.')}</div>`;
+    return;
+  }
+  let hits;
+  const digits = q.replace(/\D/g, '');
+  if (/^\d{3,5}$/.test(q.replace(/\s/g, ''))) {
+    // CRN search: exact match first, then CRNs that start with what was typed
+    hits = LIST.filter(x => String(x.s.crn).startsWith(digits))
+               .sort((a, b) => (String(b.s.crn) === digits) - (String(a.s.crn) === digits));
+    if (!hits.length) hits = LIST.filter(x => String(x.s.course_number).includes(digits));
+  } else {
+    const words = q.split(/\s+/);
+    hits = LIST.filter(x => words.every(w => x.key.includes(w)));
+  }
+  $('resTitle').textContent = hits.length ? `${hits.length} section${hits.length > 1 ? 's' : ''}` : 'No sections found';
+  res.innerHTML = hits.length
+    ? hits.slice(0, 80).map(x => card(x.s, false)).join('') + (hits.length > 80 ? '<p class="note">Showing first 80 — type more to narrow it down.</p>' : '')
+    : `<div class="empty">No section with that CRN or name in term ${esc(DB.term_code)}. Double-check the CRN on Section Tally.</div>`;
+}
+
+function openSnipe(crn) {
+  const s = DB.sections[crn]; if (!s) return;
+  current = crn;
+  const topic = topicFor(crn);
+  $('dTitle').textContent = `Snipe ${s.subject} ${s.course_number}-${s.section_sequence}`;
+  $('dSub').textContent = `${clean(s.course_title)} · CRN ${crn}`;
+  $('dTopic').textContent = topic;
+  $('dWeb').href = `${DB.ntfy_server || 'https://ntfy.sh'}/${topic}`;
+  $('testMsg').textContent = '';
+  $('saveBtn').disabled = loadMine().includes(crn);
+  $('saveBtn').textContent = loadMine().includes(crn) ? 'Already in my snipes' : 'Add to my snipes';
+  $('dlg').showModal();
+}
+
+document.addEventListener('click', e => {
+  const sn = e.target.closest('[data-snipe]'); if (sn) openSnipe(sn.dataset.snipe);
+  const rm = e.target.closest('[data-remove]');
+  if (rm) { saveMine(loadMine().filter(c => c !== rm.dataset.remove)); renderMine(); }
+});
+$('closeBtn').onclick = () => $('dlg').close();
+$('saveBtn').onclick = () => {
+  const m = loadMine(); if (!m.includes(current)) m.push(current); saveMine(m);
+  renderMine(); $('dlg').close();
+};
+$('copyBtn').onclick = async () => {
+  try { await navigator.clipboard.writeText($('dTopic').textContent); $('copyBtn').textContent = 'Copied!'; }
+  catch { $('copyBtn').textContent = 'Select it'; }
+  setTimeout(() => $('copyBtn').textContent = 'Copy', 1500);
+};
+$('testBtn').onclick = async () => {
+  const s = DB.sections[current];
+  $('testMsg').textContent = 'Sending…';
+  try {
+    const r = await fetch(`${DB.ntfy_server || 'https://ntfy.sh'}/${topicFor(current)}`, {
+      method: 'POST',
+      headers: { 'Title': 'Test alert - Rowan Course Sniper', 'Tags': 'white_check_mark' },
+      body: `It works! You'll get an alert like this when a seat opens in ${s.subject} ${s.course_number}-${s.section_sequence}.`
+    });
+    $('testMsg').textContent = r.ok ? 'Sent! Check your phone.' : 'Could not send.';
+  } catch { $('testMsg').textContent = 'Could not send.'; }
+};
+$('q').addEventListener('input', search);
+$('searchForm').addEventListener('submit', e => { e.preventDefault(); search(); });
+
+function setStatus(text, cls) { $('status').textContent = text; $('dot').className = 'dot ' + cls; }
+
+let LOAD_ERROR = '';
+async function load() {
+  if (!DATA_URL) {
+    LOAD_ERROR = 'This page has to be opened from its GitHub Pages address (https://USERNAME.github.io/rowan-sniper/), not as a file on your computer.';
+    setStatus('Setup needed', 'bad'); search(); return;
+  }
+  try {
+    const r = await fetch(DATA_URL + '?t=' + Date.now(), { cache: 'no-store' });
+    if (!r.ok) throw new Error(r.status);
+    DB = await r.json();
+    LOAD_ERROR = '';
+  } catch {
+    if (!DB) {
+      LOAD_ERROR = `No section data found at ${DATA_URL}. The checker has not finished a run yet, or it could not reach Section Tally — check the Actions tab on GitHub.`;
+      setStatus('No data yet', 'bad'); search();
+    }
+    return;
+  }
+  LIST = Object.values(DB.sections).map(s => ({
+    s, key: [s.crn, s.subject, s.course_number, `${s.subject} ${s.course_number}`, `${s.subject}${s.course_number}`,
+             clean(s.course_title), clean(s.primary_professor), s.section_sequence].join(' ').toLowerCase()
+  })).sort((a, b) => (a.s.subject + a.s.course_number + a.s.section_sequence).localeCompare(b.s.subject + b.s.course_number + b.s.section_sequence));
+  const mins = Math.round((Date.now() - new Date(DB.updated_at)) / 60000);
+  const ago = mins < 1 ? 'just now' : `${mins} min ago`;
+  setStatus(`Term ${DB.term_code} · ${LIST.length} sections · updated ${ago}`, mins <= 45 ? 'ok' : 'old');
+  renderMine();
+  search();
+}
+load();
+setInterval(load, 5 * 60 * 1000);
+</script>
+</body>
+</html>
